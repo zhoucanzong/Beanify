@@ -1,0 +1,266 @@
+/**
+ * Color space conversions and color difference calculations
+ * Supports RGB, Lab, and XYZ color spaces with DeltaE 2000
+ */
+
+// D65 reference white
+const REF_X = 95.047;
+const REF_Y = 100.0;
+const REF_Z = 108.883;
+
+/**
+ * Convert sRGB [0-255] to linear RGB [0-1]
+ */
+function srgbToLinear(v: number): number {
+  v = v / 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+
+/**
+ * Convert linear RGB [0-1] to sRGB [0-255]
+ */
+function linearToSrgb(v: number): number {
+  v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+  return Math.round(v * 255);
+}
+
+/**
+ * Convert RGB [0-255] to XYZ
+ */
+function rgbToXyz(r: number, g: number, b: number): [number, number, number] {
+  const rl = srgbToLinear(r);
+  const gl = srgbToLinear(g);
+  const bl = srgbToLinear(b);
+
+  const x = (rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375) * 100;
+  const y = (rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750) * 100;
+  const z = (rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041) * 100;
+
+  return [x, y, z];
+}
+
+/**
+ * Convert XYZ to RGB [0-255]
+ */
+function xyzToRgb(x: number, y: number, z: number): [number, number, number] {
+  x = x / 100;
+  y = y / 100;
+  z = z / 100;
+
+  const rl = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
+  const gl = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
+  const bl = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
+
+  return [
+    Math.max(0, Math.min(255, linearToSrgb(rl))),
+    Math.max(0, Math.min(255, linearToSrgb(gl))),
+    Math.max(0, Math.min(255, linearToSrgb(bl))),
+  ];
+}
+
+/**
+ * XYZ to Lab conversion
+ */
+function xyzToLab(x: number, y: number, z: number): [number, number, number] {
+  x = x / REF_X;
+  y = y / REF_Y;
+  z = z / REF_Z;
+
+  x = x > 0.008856 ? Math.pow(x, 1 / 3) : 7.787 * x + 16 / 116;
+  y = y > 0.008856 ? Math.pow(y, 1 / 3) : 7.787 * y + 16 / 116;
+  z = z > 0.008856 ? Math.pow(z, 1 / 3) : 7.787 * z + 16 / 116;
+
+  const l = 116 * y - 16;
+  const a = 500 * (x - y);
+  const b = 200 * (y - z);
+
+  return [l, a, b];
+}
+
+/**
+ * Lab to XYZ conversion
+ */
+function labToXyz(l: number, a: number, b: number): [number, number, number] {
+  let y = (l + 16) / 116;
+  let x = a / 500 + y;
+  let z = y - b / 200;
+
+  const x3 = Math.pow(x, 3);
+  const y3 = Math.pow(y, 3);
+  const z3 = Math.pow(z, 3);
+
+  x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
+  y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
+  z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
+
+  return [x * REF_X, y * REF_Y, z * REF_Z];
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Convert RGB [0-255] to Lab [L:0-100, a:-128~127, b:-128~127]
+ */
+export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  const [x, y, z] = rgbToXyz(r, g, b);
+  return xyzToLab(x, y, z);
+}
+
+/**
+ * Convert Lab to RGB [0-255]
+ */
+export function labToRgb(l: number, a: number, b: number): [number, number, number] {
+  const [x, y, z] = labToXyz(l, a, b);
+  return xyzToRgb(x, y, z);
+}
+
+/**
+ * Hex string to RGB tuple
+ */
+export function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.substring(0, 2), 16),
+    parseInt(h.substring(2, 4), 16),
+    parseInt(h.substring(4, 6), 16),
+  ];
+}
+
+/**
+ * RGB to hex string
+ */
+export function rgbToHex(r: number, g: number, b: number): string {
+  return (
+    '#' +
+    [r, g, b]
+      .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
+/**
+ * Convert hex to Lab
+ */
+export function hexToLab(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  return rgbToLab(r, g, b);
+}
+
+/**
+ * Fast squared color distance in Lab (CIE76) - for k-means clustering
+ */
+export function deltaE76Squared(lab1: [number, number, number], lab2: [number, number, number]): number {
+  const dl = lab1[0] - lab2[0];
+  const da = lab1[1] - lab2[1];
+  const db = lab1[2] - lab2[2];
+  return dl * dl + da * da + db * db;
+}
+
+/**
+ * DeltaE 2000 - perceptually uniform color distance
+ * More accurate but slower than CIE76, best for color matching
+ */
+export function deltaE2000(lab1: [number, number, number], lab2: [number, number, number]): number {
+  const L1 = lab1[0],
+    a1 = lab1[1],
+    b1 = lab1[2];
+  const L2 = lab2[0],
+    a2 = lab2[1],
+    b2 = lab2[2];
+
+  const kL = 1,
+    kC = 1,
+    kH = 1;
+
+  const C1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const C2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const Cbar = (C1 + C2) / 2;
+
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(Cbar, 7) / (Math.pow(Cbar, 7) + Math.pow(25, 7))));
+
+  const a1p = a1 * (1 + G);
+  const a2p = a2 * (1 + G);
+
+  const C1p = Math.sqrt(a1p * a1p + b1 * b1);
+  const C2p = Math.sqrt(a2p * a2p + b2 * b2);
+
+  const h1p = Math.atan2(b1, a1p);
+  const h2p = Math.atan2(b2, a2p);
+
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+
+  let dhp: number;
+  if (C1p * C2p === 0) {
+    dhp = 0;
+  } else {
+    dhp = h2p - h1p;
+    if (dhp > Math.PI) dhp -= 2 * Math.PI;
+    if (dhp < -Math.PI) dhp += 2 * Math.PI;
+  }
+
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(dhp / 2);
+
+  const Lbarp = (L1 + L2) / 2;
+  const Cbarp = (C1p + C2p) / 2;
+
+  let hbarp: number;
+  if (C1p * C2p === 0) {
+    hbarp = h1p + h2p;
+  } else {
+    hbarp = (h1p + h2p) / 2;
+    if (Math.abs(h1p - h2p) > Math.PI) {
+      hbarp += h1p + h2p < 2 * Math.PI ? Math.PI : -Math.PI;
+    }
+  }
+
+  const T =
+    1 -
+    0.17 * Math.cos(hbarp - Math.PI / 6) +
+    0.24 * Math.cos(2 * hbarp) +
+    0.32 * Math.cos(3 * hbarp + Math.PI / 30) -
+    0.2 * Math.cos(4 * hbarp - (21 * Math.PI) / 20);
+
+  const dtheta = (Math.PI / 6) * Math.exp(-Math.pow((hbarp * 180) / Math.PI - 275, 2) / Math.pow(25, 2));
+
+  const RC = 2 * Math.sqrt(Math.pow(Cbarp, 7) / (Math.pow(Cbarp, 7) + Math.pow(25, 7)));
+
+  const SL = 1 + (0.015 * Math.pow(Lbarp - 50, 2)) / Math.sqrt(20 + Math.pow(Lbarp - 50, 2));
+  const SC = 1 + 0.045 * Cbarp;
+  const SH = 1 + 0.015 * Cbarp * T;
+
+  const RT = -Math.sin(2 * dtheta) * RC;
+
+  const dE = Math.sqrt(
+    Math.pow(dLp / (kL * SL), 2) +
+      Math.pow(dCp / (kC * SC), 2) +
+      Math.pow(dHp / (kH * SH), 2) +
+      RT * (dCp / (kC * SC)) * (dHp / (kH * SH))
+  );
+
+  return dE;
+}
+
+/**
+ * Find the closest bead color from a palette using Lab DeltaE2000
+ */
+export function findClosestColor(
+  lab: [number, number, number],
+  palette: { rgb: [number, number, number] }[]
+): number {
+  let minDist = Infinity;
+  let minIdx = 0;
+
+  for (let i = 0; i < palette.length; i++) {
+    const pLab = rgbToLab(palette[i].rgb[0], palette[i].rgb[1], palette[i].rgb[2]);
+    const d = deltaE2000(lab, pLab);
+    if (d < minDist) {
+      minDist = d;
+      minIdx = i;
+    }
+  }
+
+  return minIdx;
+}
