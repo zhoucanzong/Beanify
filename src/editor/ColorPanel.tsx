@@ -35,10 +35,10 @@ export default function ColorPanel({
     const q = searchQuery.toLowerCase().trim();
     return colorPalette.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.nameEn.toLowerCase().includes(q) ||
-        c.code.toLowerCase().includes(q) ||
-        c.hex.toLowerCase().includes(q)
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.nameEn || '').toLowerCase().includes(q) ||
+        (c.code || '').toLowerCase().includes(q) ||
+        (c.hex || '').toLowerCase().includes(q)
     );
   }, [colorPalette, searchQuery]);
 

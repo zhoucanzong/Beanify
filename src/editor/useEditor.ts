@@ -45,7 +45,7 @@ export function useEditor(options: EditorOptions = {}) {
 
   const initialHistory: HistoryEntry = {
     grid: cloneGrid(initialGrid),
-    timestamp: Date.now(),
+    timestamp: 0,
     action: '初始化',
   };
 
@@ -70,6 +70,7 @@ export function useEditor(options: EditorOptions = {}) {
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const lastPosRef = useRef({ x: 0, y: 0 });
+  const shapeBaseGridRef = useRef<number[][] | null>(null);
 
   // Push a new history entry
   const pushHistory = useCallback(
@@ -225,19 +226,21 @@ export function useEditor(options: EditorOptions = {}) {
       isDraggingRef.current = true;
       dragStartRef.current = { x, y };
       lastPosRef.current = { x, y };
+      shapeBaseGridRef.current =
+        state.activeTool === 'line' || state.activeTool === 'rect' || state.activeTool === 'circle'
+          ? cloneGrid(state.grid)
+          : null;
 
       if (state.activeTool === 'picker') {
         const picked = getPixel(state.grid, x, y);
         if (picked >= 0) {
-          // Find in palette
-          const idx = state.colorPalette.findIndex(
-            (_, i) => i === picked
-          );
+          const idx = Math.min(picked, state.colorPalette.length - 1);
           if (idx >= 0) {
             setState((prev) => ({ ...prev, activeColorIndex: idx }));
           }
         }
         isDraggingRef.current = false;
+        shapeBaseGridRef.current = null;
         return;
       }
 
@@ -249,6 +252,7 @@ export function useEditor(options: EditorOptions = {}) {
           return { ...prev, grid: newGrid, history, historyIndex };
         });
         isDraggingRef.current = false;
+        shapeBaseGridRef.current = null;
         return;
       }
 
@@ -264,7 +268,7 @@ export function useEditor(options: EditorOptions = {}) {
         });
       }
     },
-    [state.activeTool, state.colorPalette, pushHistory]
+    [state.activeTool, state.grid, state.colorPalette.length, pushHistory]
   );
 
   // Continue drawing (mouse move while dragging)
@@ -289,7 +293,7 @@ export function useEditor(options: EditorOptions = {}) {
       // For shape tools, we preview by restoring from history and redrawing
       if (state.activeTool === 'line') {
         setState((prev) => {
-          const baseGrid = cloneGrid(prev.history[prev.historyIndex].grid);
+          const baseGrid = cloneGrid(shapeBaseGridRef.current || prev.grid);
           const color = prev.activeColorIndex;
           drawLine(baseGrid, startX, startY, x, y, color, prev.brushSize);
           return { ...prev, grid: baseGrid };
@@ -299,7 +303,7 @@ export function useEditor(options: EditorOptions = {}) {
 
       if (state.activeTool === 'rect') {
         setState((prev) => {
-          const baseGrid = cloneGrid(prev.history[prev.historyIndex].grid);
+          const baseGrid = cloneGrid(shapeBaseGridRef.current || prev.grid);
           const color = prev.activeColorIndex;
           drawRect(baseGrid, startX, startY, x, y, color);
           return { ...prev, grid: baseGrid };
@@ -309,7 +313,7 @@ export function useEditor(options: EditorOptions = {}) {
 
       if (state.activeTool === 'circle') {
         setState((prev) => {
-          const baseGrid = cloneGrid(prev.history[prev.historyIndex].grid);
+          const baseGrid = cloneGrid(shapeBaseGridRef.current || prev.grid);
           const color = prev.activeColorIndex;
           const dx = x - startX;
           const dy = y - startY;
@@ -320,13 +324,14 @@ export function useEditor(options: EditorOptions = {}) {
         return;
       }
     },
-    [state.activeTool, pushHistory]
+    [state.activeTool]
   );
 
   // End drawing (mouse up)
   const endDrawing = useCallback(() => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
+    shapeBaseGridRef.current = null;
 
     if (
       state.activeTool === 'brush' ||

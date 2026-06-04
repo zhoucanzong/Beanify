@@ -1,10 +1,9 @@
 /**
- * SizeSettings component - Preset sizes + custom width/height inputs
- * Uses shared SIZE_PRESETS from ImageCropper for consistency
+ * SizeSettings - Preset sizes + custom width/height inputs
  */
 
 import { useCallback, useState } from 'react';
-import { SIZE_PRESETS } from './ImageCropper';
+import { SIZE_PRESETS } from './size-presets';
 
 interface SizeSettingsProps {
   width: number;
@@ -21,21 +20,10 @@ export default function SizeSettings({ width, height, onChange, disabled }: Size
   const toggleCategory = (cat: string) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(cat)) {
-        next.delete(cat);
-      } else {
-        next.add(cat);
-      }
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
       return next;
     });
   };
-
-  const handlePreset = useCallback(
-    (w: number, h: number) => {
-      onChange(w, h);
-    },
-    [onChange]
-  );
 
   const handleWidth = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,20 +47,20 @@ export default function SizeSettings({ width, height, onChange, disabled }: Size
   }));
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E8E8E8]/80 shadow-sm shadow-black/[0.02] p-4 hover:shadow-md transition-shadow duration-200">
-      <h3 className="text-sm font-semibold text-[#2D3436] mb-3">{'尺寸设置'}</h3>
+    <div className="card-bean p-3">
+      <h3 className="section-heading">尺寸设置</h3>
 
-      {/* Preset buttons by category */}
-      <div className="space-y-1 mb-4">
+      {/* Presets */}
+      <div className="space-y-0.5 mb-4">
         {presetsByCategory.map(({ cat, presets }) => (
           <div key={cat}>
             <button
               onClick={() => toggleCategory(cat)}
               disabled={disabled}
-              className="w-full flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-[#FAFAF8] transition-colors text-left disabled:opacity-50"
+              className="flex items-center justify-between w-full py-1.5 px-2 rounded-md hover:bg-[#F2F2F7] transition-colors text-left disabled:opacity-50"
             >
-              <span className="text-xs font-medium text-[#2D3436]">{cat}</span>
-              <span className="text-[#8A8D91] text-xs">{expandedCategories.has(cat) ? '−' : '+'}</span>
+              <span className="text-xs font-medium text-[#1C1C1E]">{cat}</span>
+              <span className="text-[#8E8E93] text-xs">{expandedCategories.has(cat) ? '−' : '+'}</span>
             </button>
             {expandedCategories.has(cat) && (
               <div className="grid grid-cols-3 gap-1.5 pl-2 mt-1">
@@ -80,18 +68,10 @@ export default function SizeSettings({ width, height, onChange, disabled }: Size
                   const active = width === p.w && height === p.h;
                   return (
                     <button
-                      key={`${p.label}-${cat}`}
-                      onClick={() => handlePreset(p.w, p.h)}
+                      key={p.label}
+                      onClick={() => onChange(p.w, p.h)}
                       disabled={disabled}
-                      className={`
-                        py-1.5 px-1 rounded-lg text-xs font-medium border transition-all duration-150
-                        ${
-                          active
-                            ? 'bg-[#FF6B6B] text-white border-[#FF6B6B] shadow-sm'
-                            : 'bg-[#FAFAF8] text-[#2D3436] border-[#E8E8E8] hover:border-[#FF6B6B] hover:text-[#FF6B6B]'
-                        }
-                        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                      `}
+                      className={`option-btn ${active ? 'active-primary' : 'inactive'}`}
                     >
                       {p.label}
                     </button>
@@ -106,28 +86,20 @@ export default function SizeSettings({ width, height, onChange, disabled }: Size
       {/* Custom inputs */}
       <div className="flex items-center gap-2">
         <div className="flex-1">
-          <label className="text-xs text-[#8A8D91] mb-1 block">{'宽度'}</label>
+          <label className="text-[10px] text-[#8E8E93] mb-1 block">宽度</label>
           <input
-            type="number"
-            value={width}
-            onChange={handleWidth}
-            disabled={disabled}
-            min={5}
-            max={100}
-            className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E8E8E8] rounded-lg text-sm text-[#2D3436] outline-none focus:border-[#FF6B6B] focus:ring-1 focus:ring-[#FF6B6B]/20 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            type="number" value={width} onChange={handleWidth}
+            disabled={disabled} min={5} max={100}
+            className="w-full px-3 py-2 bg-[#F2F2F7] border border-[#E8E8EA] rounded-lg text-sm text-[#1C1C1E] outline-none focus:border-[#E85D75] focus:ring-1 focus:ring-[#E85D75]/20 transition-all"
           />
         </div>
-        <div className="text-[#8A8D91] mt-5">{'×'}</div>
+        <div className="text-[#8E8E93] mt-5">×</div>
         <div className="flex-1">
-          <label className="text-xs text-[#8A8D91] mb-1 block">{'高度'}</label>
+          <label className="text-[10px] text-[#8E8E93] mb-1 block">高度</label>
           <input
-            type="number"
-            value={height}
-            onChange={handleHeight}
-            disabled={disabled}
-            min={5}
-            max={100}
-            className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E8E8E8] rounded-lg text-sm text-[#2D3436] outline-none focus:border-[#FF6B6B] focus:ring-1 focus:ring-[#FF6B6B]/20 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            type="number" value={height} onChange={handleHeight}
+            disabled={disabled} min={5} max={100}
+            className="w-full px-3 py-2 bg-[#F2F2F7] border border-[#E8E8EA] rounded-lg text-sm text-[#1C1C1E] outline-none focus:border-[#E85D75] focus:ring-1 focus:ring-[#E85D75]/20 transition-all"
           />
         </div>
       </div>

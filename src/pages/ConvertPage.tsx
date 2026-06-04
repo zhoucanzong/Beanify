@@ -1,7 +1,6 @@
 /**
  * ConvertPage - Image to bead pattern conversion
- * Full restore of the original conversion pipeline:
- *   Upload → Crop → Process → Preview → Export
+ * Upload → Crop → Process → Preview → Export
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -10,6 +9,7 @@ import { Palette } from 'lucide-react';
 import type { ProcessOptions } from '../engine/types';
 import Header from '../components/Header';
 import UploadZone from '../components/UploadZone';
+import SampleCases from '../components/SampleCases';
 import SizeSettings from '../components/SizeSettings';
 import ColorSettings from '../components/ColorSettings';
 import ProcessingOptions from '../components/ProcessingOptions';
@@ -20,14 +20,14 @@ import ImageCropper from '../components/ImageCropper';
 import { useImageProcessor } from '../hooks/useImageProcessor';
 
 const DEFAULT_OPTIONS: ProcessOptions = {
-  targetWidth: 29,
-  targetHeight: 29,
+  targetWidth: 58,
+  targetHeight: 58,
   maxColors: 16,
   brand: 'mard',
-  denoiseStrength: 2,
-  noiseFilter: true,
+  denoiseStrength: 0,
+  noiseFilter: false,
   removeBackground: false,
-  useCommonColors: true,
+  useCommonColors: false,
 };
 
 type Phase = 'upload' | 'crop' | 'result';
@@ -40,9 +40,9 @@ export default function ConvertPage() {
   const [options, setOptions] = useState<ProcessOptions>({ ...DEFAULT_OPTIONS });
   const [showGrid, setShowGrid] = useState(true);
   const prevOptionsRef = useRef<ProcessOptions>(options);
-  const { result, isProcessing, process, reprocess, clear } = useImageProcessor();
+  const { result, isProcessing, error, process, reprocess, clear } = useImageProcessor();
 
-  // Auto-reprocess on options change (only in result phase)
+  // Auto-reprocess on options change
   useEffect(() => {
     if (phase !== 'result' || !imageUrl || !result) return;
     const prev = prevOptionsRef.current;
@@ -65,10 +65,16 @@ export default function ConvertPage() {
     }
   }, [options, imageUrl, result, reprocess, phase]);
 
+  // Normal upload flow
   const handleImageUpload = useCallback((url: string) => {
     setCropImageUrl(url);
     setPhase('crop');
   }, []);
+
+  // Sample case: same as normal upload — goes through crop phase
+  const handleSampleSelect = useCallback((url: string) => {
+    handleImageUpload(url);
+  }, [handleImageUpload]);
 
   const handleCropConfirm = useCallback((croppedUrl: string, w: number, h: number) => {
     setImageUrl(croppedUrl);
@@ -129,7 +135,7 @@ export default function ConvertPage() {
   const actualColorCount = result?.colorMap.length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F5F3F0]">
+    <div className="min-h-screen flex flex-col bg-[#F8F7F4]">
       <Header />
 
       {phase === 'crop' && cropImageUrl ? (
@@ -141,16 +147,23 @@ export default function ConvertPage() {
           onCancel={handleCropCancel}
         />
       ) : (
-        <main className="flex-1 max-w-[1440px] w-full mx-auto p-4 lg:p-6">
-          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+        <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 lg:px-6 py-5">
+          <div className="flex flex-col lg:flex-row gap-5">
+            {/* Left panel */}
+            <aside className="w-full lg:w-[270px] flex-shrink-0 space-y-3">
+              {/* Quick try — sample cases (only visible on upload phase) */}
+              {phase !== 'result' && (
+                <SampleCases onSelectImage={handleSampleSelect} />
+              )}
 
-            {/* Left panel - Controls */}
-            <aside className="w-full lg:w-[280px] flex-shrink-0 space-y-4">
               <UploadZone
                 imageUrl={imageUrl}
                 onImageUpload={handleImageUpload}
                 onClearImage={handleClearImage}
               />
+
+
+
               {phase === 'result' && (
                 <>
                   <SizeSettings
@@ -179,54 +192,56 @@ export default function ConvertPage() {
                     disabled={!imageUrl}
                   />
 
-                  {/* Divider */}
+                  {/* Divider + Editor */}
                   <div className="relative py-1">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#E8E8E8]" /></div>
-                    <div className="relative flex justify-center"><span className="bg-[#F5F3F0] px-3 text-xs text-[#8A8D91]">或者</span></div>
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#E8E8EA]" /></div>
+                    <div className="relative flex justify-center"><span className="bg-[#F8F7F4] px-3 text-xs text-[#8E8E93]">或者</span></div>
                   </div>
 
-                  {/* Edit in editor button */}
                   <button
                     onClick={() => {
                       if (!result) return;
-                      // Navigate to editor with result data
                       const params = new URLSearchParams();
                       params.set('grid', JSON.stringify(result.grid));
-                      params.set('palette', JSON.stringify(result.colorMap.map(c => ({ id: c.id, name: c.name, hex: c.hex, rgb: c.rgb, brand: c.brand, code: c.code }))));
+                      params.set('palette', JSON.stringify(result.colorMap.map(c => ({
+                        id: c.id, name: c.name, hex: c.hex,
+                        rgb: c.rgb, brand: c.brand, code: c.code,
+                      }))));
                       params.set('w', String(result.width));
                       params.set('h', String(result.height));
                       params.set('brand', options.brand);
                       navigate('/editor?' + params.toString());
                     }}
                     disabled={!result}
-                    className="w-full py-3 bg-gradient-to-r from-[#4ECDC4] to-[#6EDDD6] text-white rounded-2xl text-sm font-semibold hover:shadow-lg hover:shadow-[#4ECDC4]/25 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all bg-gradient-to-r from-[#E85D75] to-[#F0788C] hover:shadow-lg hover:shadow-[#E85D75]/25 active:scale-[0.97] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <Palette size={18} />
+                    <Palette size={16} />
                     进入画板编辑
                   </button>
                 </>
               )}
             </aside>
 
-            {/* Center panel - Preview */}
+            {/* Center — Preview */}
             <section className="flex-1 min-w-0">
               <GridPreview
                 result={result}
                 isProcessing={isProcessing}
+                error={error}
                 showGrid={showGrid}
                 onToggleGrid={() => setShowGrid((v) => !v)}
+                onNewCanvas={() => navigate('/editor')}
               />
             </section>
 
-            {/* Right panel - Stats & Export */}
-            <aside className="w-full lg:w-[260px] flex-shrink-0 space-y-4">
+            {/* Right — Stats */}
+            <aside className="w-full lg:w-[250px] flex-shrink-0 space-y-3">
               <MaterialStats result={result} />
             </aside>
           </div>
         </main>
       )}
 
-      {/* Bottom color palette bar */}
       {phase === 'result' && <ColorPaletteBar result={result} />}
     </div>
   );

@@ -1,9 +1,9 @@
 /**
- * UploadZone component - Drag & drop image upload area
+ * UploadZone component - Drag & drop with cleaner design
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { Upload, ImageIcon, X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 
 interface UploadZoneProps {
   imageUrl: string | null;
@@ -20,11 +20,11 @@ export default function UploadZone({ imageUrl, onImageUpload, onClearImage }: Up
   const handleFile = useCallback(
     (file: File) => {
       if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
-        alert('\u8bf7\u4e0a\u4f20 JPG\u3001PNG \u6216 WEBP \u683c\u5f0f\u7684\u56fe\u7247');
+        alert('请上传 JPG、PNG 或 WEBP 格式的图片');
         return;
       }
       if (file.size > 20 * 1024 * 1024) {
-        alert('\u56fe\u7247\u5927\u5c0f\u4e0d\u80fd\u8d85\u8fc720MB');
+        alert('图片大小不能超过20MB');
         return;
       }
       const reader = new FileReader();
@@ -56,9 +56,7 @@ export default function UploadZone({ imageUrl, onImageUpload, onClearImage }: Up
       e.stopPropagation();
       setIsDragging(false);
       const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        handleFile(files[0]);
-      }
+      if (files.length > 0) handleFile(files[0]);
     },
     [handleFile]
   );
@@ -66,9 +64,7 @@ export default function UploadZone({ imageUrl, onImageUpload, onClearImage }: Up
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (files && files.length > 0) {
-        handleFile(files[0]);
-      }
+      if (files && files.length > 0) handleFile(files[0]);
     },
     [handleFile]
   );
@@ -77,93 +73,62 @@ export default function UploadZone({ imageUrl, onImageUpload, onClearImage }: Up
     fileInputRef.current?.click();
   }, []);
 
-  // If image is uploaded, show thumbnail with re-upload option
+  // Uploaded state
   if (imageUrl) {
     return (
-      <div className="bg-white rounded-2xl border border-[#E8E8E8]/80 shadow-sm shadow-black/[0.02] p-4 hover:shadow-md transition-shadow duration-200">
+      <div className="card-bean p-3">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-[#2D3436]">{'\u5df2\u4e0a\u4f20\u56fe\u7247'}</h3>
+          <h3 className="section-heading mb-0">已上传图片</h3>
           <button
             onClick={onClearImage}
-            className="p-1 rounded-md hover:bg-red-50 text-[#8A8D91] hover:text-red-500 transition-colors"
-            title={'\u6e05\u9664\u56fe\u7247'}
+            className="p-1 rounded-md hover:bg-[#FFF0F2] text-[#8E8E93] hover:text-[#E85D75] transition-colors"
+            title="清除图片"
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
-        <div className="relative group" style={{ aspectRatio: '16/9' }}>
-          <img
-            src={imageUrl}
-            alt="Uploaded"
-            className="w-full h-full object-contain rounded-lg border border-[#E8E8E8] bg-[#FAFAF8]"
-          />
-          <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <div className="relative group rounded-lg overflow-hidden bg-[#F2F2F7]" style={{ aspectRatio: '16/9' }}>
+          <img src={imageUrl} alt="Uploaded" className="w-full h-full object-contain" />
+          <div className="absolute inset-0 bg-black/30 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <button
               onClick={handleClick}
-              className="px-4 py-2 bg-white rounded-lg text-sm font-medium text-[#2D3436] shadow-lg hover:bg-[#FAFAF8] transition-colors flex items-center gap-2"
+              className="px-3.5 py-2 bg-white rounded-lg text-xs font-medium text-[#1C1C1E] shadow-lg hover:bg-[#F8F8F8] transition-colors flex items-center gap-1.5"
             >
-              <Upload size={16} />
-              {'\u91cd\u65b0\u4e0a\u4f20'}
+              <Upload size={14} />
+              重新上传
             </button>
           </div>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT_TYPES}
-          className="hidden"
-          onChange={handleChange}
-        />
+        <input ref={fileInputRef} type="file" accept={ACCEPT_TYPES} className="hidden" onChange={handleChange} />
       </div>
     );
   }
 
   // Empty upload zone
   return (
-    <div className="bg-white rounded-2xl border border-[#E8E8E8]/80 shadow-sm shadow-black/[0.02] p-4 hover:shadow-md transition-shadow duration-200">
-      <h3 className="text-sm font-semibold text-[#2D3436] mb-3">{'\u4e0a\u4f20\u56fe\u7247'}</h3>
+    <div className="card-bean p-3">
+      <h3 className="section-heading mb-3">上传图片</h3>
       <div
         onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`
-          relative flex flex-col items-center justify-center
-          h-[160px] rounded-xl border-2 border-dashed cursor-pointer
+          relative flex flex-col items-center justify-center h-[140px] rounded-lg border-2 border-dashed cursor-pointer
           transition-all duration-200
-          ${
-            isDragging
-              ? 'border-[#FF6B6B] bg-[#FFF5F5]'
-              : 'border-[#D0D0D0] bg-[#FAFAF8] hover:border-[#FF6B6B] hover:bg-[#FFF5F5]'
+          ${isDragging
+            ? 'border-[#E85D75] bg-[#FFF0F2]'
+            : 'border-[#D1D1D6] bg-[#F2F2F7] hover:border-[#E85D75] hover:bg-[#FFF0F2]'
           }
         `}
       >
-        <div
-          className={`
-          w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-colors
-          ${isDragging ? 'bg-[#FF6B6B]' : 'bg-[#FF6B6B]/10'}
-        `}
-        >
-          {isDragging ? (
-            <ImageIcon size={24} className="text-white" />
-          ) : (
-            <Upload size={24} className="text-[#FF6B6B]" />
-          )}
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${isDragging ? 'bg-[#E85D75]' : 'bg-[#E85D75]/10'}`}>
+          {isDragging ? <Upload size={20} className="text-white" /> : <Upload size={20} className="text-[#E85D75]" />}
         </div>
-        <p className="text-sm text-[#2D3436] font-medium">
-          {'\u70b9\u51fb\u4e0a\u4f20\u6216\u62d6\u62fd\u56fe\u7247\u5230\u6b64\u5904'}
-        </p>
-        <p className="text-xs text-[#8A8D91] mt-1">
-          {'\u652f\u6301 JPG\u3001PNG\u3001WEBP \u683c\u5f0f\uff0c\u6700\u592720MB'}
-        </p>
+        <p className="text-sm text-[#1C1C1E] font-medium">点击上传或拖拽图片到此</p>
+        <p className="text-xs text-[#8E8E93] mt-0.5">支持 JPG、PNG、WEBP，最大20MB</p>
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={ACCEPT_TYPES}
-        className="hidden"
-        onChange={handleChange}
-      />
+      <input ref={fileInputRef} type="file" accept={ACCEPT_TYPES} className="hidden" onChange={handleChange} />
     </div>
   );
 }

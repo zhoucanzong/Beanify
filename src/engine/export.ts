@@ -5,7 +5,7 @@
  */
 
 import type { ProcessResult } from './types';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 interface PNGExportOptions {
   cellSize?: number;
@@ -317,11 +317,13 @@ export function exportToExcel(result: ProcessResult, _options: ExcelExportOption
       const colorIdx = r - 1 < sortedStats.length ? sortedStats[r - 1].colorIndex : -1;
       const bgColor = colorIdx >= 0 ? 'FF' + colorMap[colorIdx].hex.replace('#', '') : 'FFFFFFFF';
 
+      // Only fill color in the color code column (index 1)
+      const fillColor = c === 1 ? (isTotal ? 'E8E8E8' : bgColor) : 'FFFFFFFF';
       ws2[cellRef] = {
         v: ws2Data[r][c],
         t: typeof ws2Data[r][c] === 'number' ? 'n' : 's',
         s: {
-          fill: { patternType: 'solid', fgColor: { rgb: isTotal ? 'E8E8E8' : bgColor } },
+          fill: { patternType: 'solid', fgColor: { rgb: fillColor } },
           font: {
             bold: isTotal,
             color: { rgb: isTotal || !isLightColor(colorIdx >= 0 ? colorMap[colorIdx].rgb : [255, 255, 255]) ? '000000' : '000000' },

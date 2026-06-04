@@ -40,26 +40,7 @@ function rgbToXyz(r: number, g: number, b: number): [number, number, number] {
 }
 
 /**
- * Convert XYZ to RGB [0-255]
- */
-function xyzToRgb(x: number, y: number, z: number): [number, number, number] {
-  x = x / 100;
-  y = y / 100;
-  z = z / 100;
-
-  const rl = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
-  const gl = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
-  const bl = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
-
-  return [
-    Math.max(0, Math.min(255, linearToSrgb(rl))),
-    Math.max(0, Math.min(255, linearToSrgb(gl))),
-    Math.max(0, Math.min(255, linearToSrgb(bl))),
-  ];
-}
-
-/**
- * XYZ to Lab conversion
+ * Convert XYZ to Lab
  */
 function xyzToLab(x: number, y: number, z: number): [number, number, number] {
   x = x / REF_X;
@@ -77,25 +58,6 @@ function xyzToLab(x: number, y: number, z: number): [number, number, number] {
   return [l, a, b];
 }
 
-/**
- * Lab to XYZ conversion
- */
-function labToXyz(l: number, a: number, b: number): [number, number, number] {
-  let y = (l + 16) / 116;
-  let x = a / 500 + y;
-  let z = y - b / 200;
-
-  const x3 = Math.pow(x, 3);
-  const y3 = Math.pow(y, 3);
-  const z3 = Math.pow(z, 3);
-
-  x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
-  y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
-  z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
-
-  return [x * REF_X, y * REF_Y, z * REF_Z];
-}
-
 // ============================================================================
 // Public API
 // ============================================================================
@@ -106,14 +68,6 @@ function labToXyz(l: number, a: number, b: number): [number, number, number] {
 export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
   const [x, y, z] = rgbToXyz(r, g, b);
   return xyzToLab(x, y, z);
-}
-
-/**
- * Convert Lab to RGB [0-255]
- */
-export function labToRgb(l: number, a: number, b: number): [number, number, number] {
-  const [x, y, z] = labToXyz(l, a, b);
-  return xyzToRgb(x, y, z);
 }
 
 /**
@@ -160,19 +114,12 @@ export function deltaE76Squared(lab1: [number, number, number], lab2: [number, n
 
 /**
  * DeltaE 2000 - perceptually uniform color distance
- * More accurate but slower than CIE76, best for color matching
  */
 export function deltaE2000(lab1: [number, number, number], lab2: [number, number, number]): number {
-  const L1 = lab1[0],
-    a1 = lab1[1],
-    b1 = lab1[2];
-  const L2 = lab2[0],
-    a2 = lab2[1],
-    b2 = lab2[2];
+  const L1 = lab1[0], a1 = lab1[1], b1 = lab1[2];
+  const L2 = lab2[0], a2 = lab2[1], b2 = lab2[2];
 
-  const kL = 1,
-    kC = 1,
-    kH = 1;
+  const kL = 1, kC = 1, kH = 1;
 
   const C1 = Math.sqrt(a1 * a1 + b1 * b1);
   const C2 = Math.sqrt(a2 * a2 + b2 * b2);
@@ -243,24 +190,78 @@ export function deltaE2000(lab1: [number, number, number], lab2: [number, number
   return dE;
 }
 
+// ============================================================================
+// Palette Lab cache utilities
+// ============================================================================
+
 /**
- * Find the closest bead color from a palette using Lab DeltaE2000
+ * Precompute Lab values for a palette. Call once and reuse across hot loops.
+ * Reduces rgbToLab calls from O(N×palette) to O(palette).
+ */
+export function precomputePaletteLabs(
+  palette: { rgb: [number, number, number] }[]
+): [number, number, number][] {
+  const labs: [number, number, number][] = new Array(palette.length);
+  for (let i = 0; i < palette.length; i++) {
+    labs[i] = rgbToLab(palette[i].rgb[0], palette[i].rgb[1], palette[i].rgb[2]);
+  }
+  return labs;
+}
+
+/**
+ * Find the closest bead color from a palette using Lab DeltaE2000.
+ * Accepts optional precomputed paletteLabs for performance.
  */
 export function findClosestColor(
   lab: [number, number, number],
-  palette: { rgb: [number, number, number] }[]
+  palette: { rgb: [number, number, number] }[],
+  paletteLabs?: [number, number, number][]
+): number {
+  const labs = paletteLabs ?? precomputePaletteLabs(palette);
+  let minDist = Infinity;
+  let minIdx = 0;
+  for (let i = 0; i < labs.length; i++) {
+    const d = deltaE2000(lab, labs[i]);
+    if (d < minDist) { minDist = d; minIdx = i; }
+  }
+  return minIdx;
+}
+
+/**
+ * Find the closest bead color from a precomputed Lab palette (fast path).
+ */
+export function findClosestColorCached(
+  lab: [number, number, number],
+  paletteLabs: [number, number, number][]
 ): number {
   let minDist = Infinity;
   let minIdx = 0;
-
-  for (let i = 0; i < palette.length; i++) {
-    const pLab = rgbToLab(palette[i].rgb[0], palette[i].rgb[1], palette[i].rgb[2]);
-    const d = deltaE2000(lab, pLab);
-    if (d < minDist) {
-      minDist = d;
-      minIdx = i;
-    }
+  for (let i = 0; i < paletteLabs.length; i++) {
+    const d = deltaE2000(lab, paletteLabs[i]);
+    if (d < minDist) { minDist = d; minIdx = i; }
   }
-
   return minIdx;
+}
+
+// ============================================================================
+// Weighted Lab distance for clustering (emphasizes chromaticity over lightness)
+// ============================================================================
+
+/**
+ * Weighted CIE76 squared distance. Emphasizes chromaticity (a, b) over
+ * lightness (L), since hue/saturation differences matter more than brightness
+ * differences in bead pattern perception.
+ *
+ * Default weights: L=1.0, a=1.5, b=1.5 (30% more weight on chromaticity)
+ */
+export function deltaE76SquaredWeighted(
+  lab1: [number, number, number],
+  lab2: [number, number, number],
+  wL = 1.0,
+  wAB = 1.5
+): number {
+  const dl = (lab1[0] - lab2[0]) * wL;
+  const da = (lab1[1] - lab2[1]) * wAB;
+  const db = (lab1[2] - lab2[2]) * wAB;
+  return dl * dl + da * da + db * db;
 }

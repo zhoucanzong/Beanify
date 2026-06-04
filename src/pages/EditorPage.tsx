@@ -1,10 +1,9 @@
 /**
- * EditorPage - Main editor page that assembles all editor components
- * Layout: Header | (ToolSidebar + PixelCanvas + ColorPanel) | Toolbar
- * Supports URL params for loading initial state from result page
+ * EditorPage - Main editor page that assembles all editor components.
+ * Supports blank drawing, editing converted patterns, keyboard shortcuts, and exports.
  */
 
-import { useEffect, useMemo, useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useEditor } from '../editor/useEditor';
 import EditorHeader from '../editor/EditorHeader';
@@ -12,127 +11,207 @@ import ToolSidebar from '../editor/ToolSidebar';
 import PixelCanvas from '../editor/PixelCanvas';
 import ColorPanel from '../editor/ColorPanel';
 import EditorToolbar from '../editor/EditorToolbar';
-import type { BeadColor } from '../engine/types';
+import { downloadBlob, exportToExcel, exportToPNG } from '../engine/export';
+import type { BeadColor, ColorStat, ProcessResult } from '../engine/types';
+import type { ToolType } from '../editor/types';
 
-// Parse grid data from base64 string
-function parseGridFromBase64(data: string): number[][] | null {
+function parseParamJSON<T>(data: string): T | null {
   try {
-    const json = atob(decodeURIComponent(data));
-    return JSON.parse(json);
+    return JSON.parse(data) as T;
   } catch {
-    return null;
+    try {
+      return JSON.parse(atob(decodeURIComponent(data))) as T;
+    } catch {
+      return null;
+    }
   }
 }
 
-// Parse color palette from base64 string
-function parsePaletteFromBase64(data: string): BeadColor[] | null {
-  try {
-    const json = atob(decodeURIComponent(data));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
+function parseSize(value: string | null, fallback: number) {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseGridParam(data: string): number[][] | null {
+  const grid = parseParamJSON<number[][]>(data);
+  if (!Array.isArray(grid) || !Array.isArray(grid[0])) return null;
+  return grid;
+}
+
+function normalizePalette(palette: Partial<BeadColor>[], brand: string): BeadColor[] {
+  return palette
+    .filter((color): color is Partial<BeadColor> & {
+      hex: string;
+      rgb: [number, number, number];
+      code: string;
+    } => Boolean(color.hex && color.rgb && color.code))
+    .map((color, index) => ({
+      id: color.id || `${brand}-${color.code}-${index}`,
+      name: color.name || color.nameEn || color.code,
+      nameEn: color.nameEn || color.name || color.code,
+      hex: color.hex,
+      rgb: color.rgb,
+      brand: color.brand || brand,
+      code: color.code,
+      isCommon: color.isCommon ?? true,
+    }));
+}
+
+function parsePaletteParam(data: string, brand: string): BeadColor[] | null {
+  const palette = parseParamJSON<Partial<BeadColor>[]>(data);
+  if (!Array.isArray(palette)) return null;
+  const normalized = normalizePalette(palette, brand);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function useInitialEditorOptions(searchParams: URLSearchParams) {
+  return useMemo(() => {
+    const gridData = searchParams.get('grid');
+    const paletteData = searchParams.get('palette');
+    const brand = searchParams.get('brand') || 'mard';
+    const fallbackWidth = parseSize(searchParams.get('w'), 29);
+    const fallbackHeight = parseSize(searchParams.get('h'), 29);
+    const options: Parameters<typeof useEditor>[0] = {
+      width: fallbackWidth,
+      height: fallbackHeight,
+      brand,
+    };
+
+    if (gridData) {
+      const grid = parseGridParam(gridData);
+      if (grid) {
+        options.grid = grid;
+        options.width = grid[0]?.length || fallbackWidth;
+        options.height = grid.length || fallbackHeight;
+      }
+    }
+
+    if (paletteData) {
+      const palette = parsePaletteParam(paletteData, brand);
+      if (palette) options.colorPalette = palette;
+    }
+
+    return options;
+  }, [searchParams]);
+}
+
+function buildExportResult(
+  grid: number[][],
+  palette: BeadColor[],
+  width: number,
+  height: number
+): ProcessResult {
+  const usedPaletteIndices = Array.from(
+    new Set(grid.flat().filter((index) => index >= 0 && index < palette.length))
+  ).sort((a, b) => a - b);
+
+  const paletteIndexMap = new Map<number, number>();
+  usedPaletteIndices.forEach((paletteIndex, compactIndex) => {
+    paletteIndexMap.set(paletteIndex, compactIndex);
+  });
+
+  const compactGrid = grid.map((row) =>
+    row.map((paletteIndex) => paletteIndexMap.get(paletteIndex) ?? -1)
+  );
+  const colorMap = usedPaletteIndices.map((paletteIndex) => palette[paletteIndex]);
+  const counts = new Array(colorMap.length).fill(0) as number[];
+  let total = 0;
+
+  compactGrid.forEach((row) => {
+    row.forEach((colorIndex) => {
+      if (colorIndex >= 0) {
+        counts[colorIndex] += 1;
+        total += 1;
+      }
+    });
+  });
+
+  const stats: ColorStat[] = counts
+    .map((count, colorIndex) => ({
+      colorIndex,
+      count,
+      percentage: total === 0 ? 0 : (count / total) * 100,
+    }))
+    .filter((stat) => stat.count > 0);
+
+  return {
+    grid: compactGrid,
+    colorMap,
+    stats,
+    width,
+    height,
+    originalImage: '',
+  };
+}
+
+function makeFilename(width: number, height: number, extension: string) {
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  return `bead-pattern-${width}x${height}-${timestamp}.${extension}`;
+}
+
+function confirmEmptyExport(grid: number[][]) {
+  const hasPaintedCells = grid.some((row) => row.some((colorIndex) => colorIndex >= 0));
+  return hasPaintedCells || window.confirm('画布还是空的，仍然导出吗？');
 }
 
 export default function EditorPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  // Parse URL params for initial state
-  const initialOptions = useMemo(() => {
-    const from = searchParams.get('from');
-    const gridData = searchParams.get('grid');
-    const paletteData = searchParams.get('palette');
-    const w = parseInt(searchParams.get('w') || '29', 10);
-    const h = parseInt(searchParams.get('h') || '29', 10);
-    const brand = searchParams.get('brand') || 'mard';
-
-    const options: Parameters<typeof useEditor>[0] = {
-      width: w,
-      height: h,
-      brand,
-    };
-
-    if (from === 'result' && gridData) {
-      const grid = parseGridFromBase64(gridData);
-      if (grid) {
-        options.grid = grid;
-        options.width = grid[0]?.length || w;
-        options.height = grid.length || h;
-      }
-    }
-
-    if (paletteData) {
-      const palette = parsePaletteFromBase64(paletteData);
-      if (palette) {
-        options.colorPalette = palette;
-      }
-    }
-
-    return options;
-  }, [searchParams]);
-
+  const initialOptions = useInitialEditorOptions(searchParams);
   const editor = useEditor(initialOptions);
-
-  // Recently used colors state (max 8)
   const [recentColors, setRecentColors] = useState<number[]>([]);
 
-  // Handle color select with recent tracking
   const handleColorSelect = useCallback(
     (index: number) => {
       editor.setColor(index);
-      setRecentColors((prev) => {
-        const next = [index, ...prev.filter((i) => i !== index)].slice(0, 8);
-        return next;
-      });
+      setRecentColors((prev) => [index, ...prev.filter((i) => i !== index)].slice(0, 8));
     },
     [editor]
   );
 
-  // Export handlers
   const handleExportPNG = useCallback(() => {
-    const canvas = document.querySelector('canvas');
-    if (!canvas) return;
-
-    const link = document.createElement('a');
-    link.download = `bead-pattern-${editor.width}x${editor.height}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  }, [editor.width, editor.height]);
+    if (!confirmEmptyExport(editor.grid)) return;
+    const result = buildExportResult(editor.grid, editor.colorPalette, editor.width, editor.height);
+    const cellSize = editor.width > 80 || editor.height > 80 ? 20 : 32;
+    const blob = exportToPNG(result, {
+      cellSize,
+      showGrid: editor.showGrid,
+      showLabels: cellSize >= 28,
+    });
+    downloadBlob(blob, makeFilename(editor.width, editor.height, 'png'));
+  }, [editor]);
 
   const handleExportExcel = useCallback(() => {
-    // Placeholder - will be implemented with actual Excel export logic
-    alert('Excel导出功能即将上线');
-  }, []);
+    if (!confirmEmptyExport(editor.grid)) return;
+    const result = buildExportResult(editor.grid, editor.colorPalette, editor.width, editor.height);
+    const blob = exportToExcel(result, { brand: editor.brand });
+    downloadBlob(blob, makeFilename(editor.width, editor.height, 'xlsx'));
+  }, [editor]);
 
-  // Handle back navigation
   const handleBack = useCallback(() => {
     navigate('/');
   }, [navigate]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
-      // Undo: Ctrl+Z
-      if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === 'z') {
         e.preventDefault();
         editor.undo();
         return;
       }
 
-      // Redo: Ctrl+Shift+Z
-      if (e.ctrlKey && e.shiftKey && e.key === 'z') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'z') {
         e.preventDefault();
         editor.redo();
         return;
       }
 
-      // Tool shortcuts
-      const toolMap: Record<string, import('../editor/types').ToolType> = {
+      const toolMap: Record<string, ToolType> = {
         b: 'brush',
         e: 'eraser',
         f: 'fill',
@@ -141,8 +220,7 @@ export default function EditorPage() {
         r: 'rect',
         c: 'circle',
       };
-
-      const tool = toolMap[e.key.toLowerCase()];
+      const tool = toolMap[key];
       if (tool) {
         e.preventDefault();
         editor.setTool(tool);
@@ -155,7 +233,6 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0d0d1a] overflow-hidden">
-      {/* Top header */}
       <EditorHeader
         title="豆你玩画板"
         width={editor.width}
@@ -166,9 +243,7 @@ export default function EditorPage() {
         onSizeChange={editor.setCanvasSize}
       />
 
-      {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left tool sidebar */}
         <ToolSidebar
           activeTool={editor.activeTool}
           brushSize={editor.brushSize}
@@ -176,12 +251,10 @@ export default function EditorPage() {
           onBrushSizeChange={editor.setBrushSize}
         />
 
-        {/* Center canvas area */}
         <div className="flex-1 relative overflow-hidden">
           <PixelCanvas editor={editor} />
         </div>
 
-        {/* Right color panel */}
         <ColorPanel
           colorPalette={editor.colorPalette}
           activeColorIndex={editor.activeColorIndex}
@@ -192,7 +265,6 @@ export default function EditorPage() {
         />
       </div>
 
-      {/* Bottom toolbar */}
       <EditorToolbar
         canUndo={editor.canUndo}
         canRedo={editor.canRedo}

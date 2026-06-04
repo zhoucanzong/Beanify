@@ -24,6 +24,7 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
   const panStartRef = useRef({ x: 0, y: 0 });
   const offsetStartRef = useRef({ x: 0, y: 0 });
   const currentPosRef = useRef<{ x: number; y: number } | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
 
   const { grid, width, height, colorPalette, zoom, offsetX, offsetY, showGrid } =
     editor;
@@ -137,21 +138,30 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
     [cellSize]
   );
 
-  // Mouse down handler
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  // Pointer down handler
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (activePointerIdRef.current !== null) return;
+      activePointerIdRef.current = e.pointerId;
+      e.currentTarget.setPointerCapture(e.pointerId);
+
       if (e.button === 2 || (e.button === 0 && e.altKey)) {
-        // Right-click or Alt+left: pan
         setIsPanning(true);
         panStartRef.current = { x: e.clientX, y: e.clientY };
         offsetStartRef.current = { x: editor.offsetX, y: editor.offsetY };
         return;
       }
 
-      if (e.button !== 0) return;
+      if (e.button !== 0) {
+        activePointerIdRef.current = null;
+        return;
+      }
 
       const { x, y } = screenToGrid(e.clientX, e.clientY);
-      if (x < 0 || x >= width || y < 0 || y >= height) return;
+      if (x < 0 || x >= width || y < 0 || y >= height) {
+        activePointerIdRef.current = null;
+        return;
+      }
 
       setIsDrawing(true);
       currentPosRef.current = { x, y };
@@ -160,9 +170,11 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
     [editor, screenToGrid, width, height]
   );
 
-  // Mouse move handler
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  // Pointer move handler
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+
       if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
@@ -179,8 +191,11 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
     [isPanning, isDrawing, editor, screenToGrid]
   );
 
-  // Mouse up handler
-  const handleMouseUp = useCallback(() => {
+  // Pointer up handler
+  const handlePointerEnd = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
+    if (e && activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+
     if (isPanning) {
       setIsPanning(false);
       return;
@@ -209,9 +224,10 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
     e.preventDefault();
   }, []);
 
-  // Global mouse up to handle dragging outside canvas
+  // Global pointer end to handle dragging outside canvas
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalPointerEnd = () => {
+      activePointerIdRef.current = null;
       if (isPanning) setIsPanning(false);
       if (isDrawing) {
         setIsDrawing(false);
@@ -220,8 +236,12 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
       }
     };
 
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('pointerup', handleGlobalPointerEnd);
+    window.addEventListener('pointercancel', handleGlobalPointerEnd);
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerEnd);
+      window.removeEventListener('pointercancel', handleGlobalPointerEnd);
+    };
   }, [isPanning, isDrawing, editor]);
 
   return (
@@ -230,10 +250,12 @@ export default function PixelCanvas({ editor }: PixelCanvasProps) {
       className="absolute inset-0 overflow-hidden flex items-center justify-center cursor-crosshair select-none"
       style={{
         cursor: isPanning ? 'grabbing' : editor.activeTool === 'picker' ? 'crosshair' : 'default',
+        touchAction: 'none',
       }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     >
