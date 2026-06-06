@@ -20,7 +20,7 @@
 - 🔄 **镜像翻转** — 水平翻转适配不同需求
 
 ### 品质保障
-- 🔒 **纯本地处理** — 图片不上传服务器，保护你的隐私
+- 🔒 **纯本地处理 + 原生 App** — 图片不上传服务器，已打包为 Android 原生应用（APK 直装）
 - 🆓 **完全免费** — 无需注册、无需登录、无功能限制
 - 📱 **移动端适配** — 手机竖屏快速生成，桌面端精细编辑
 - 🌐 **中文本土化** — 完整中文界面，适配国内拼豆品牌和用户习惯
@@ -45,43 +45,38 @@ npm run preview
 
 ## 📱 Android App
 
-Beanify 使用 [Capacitor](https://capacitorjs.com) 将 Web App 打包为 Android 原生应用。
+Beanify 已通过 [Capacitor](https://capacitorjs.com) 打包为 Android 原生应用，支持直接在手机上安装运行，无需浏览器。
 
-### 前提条件
+### ✅ 当前支持的原生能力
 
-- [Android Studio](https://developer.android.com/studio)（含 Android SDK 34+）
-- JDK 17+
-- Android SDK 命令行工具（`sdkmanager`）
+| 功能 | 状态 |
+|------|------|
+| 图片上传（相册） | ✅ 支持 |
+| 拼豆图纸生成 | ✅ 与 Web 版完全一致 |
+| 导出 PNG | ✅ 保存到手机 Documents |
+| 导出 Excel | ✅ 保存到手机 Documents |
+| 分享图纸 | ✅ 调起系统分享面板 |
+| 离线使用 | ✅ 无需网络 |
 
-### 构建 APK
+### 📦 下载 APK
+
+从 [GitHub Releases](https://github.com/zhoucanzong/Beanify/releases) 下载最新 APK，传到手机上安装即可。
+
+### 🔧 自行构建
+
+如果你有 Android 开发环境，也可以本地构建：
 
 ```bash
-# 1. 安装 Capacitor 依赖（已完成）
+# 前提：安装 Android Studio + JDK 17+
 npm install
-
-# 2. 构建前端
 npm run build
-
-# 3. 同步到 Android 项目
 npx cap sync android
-
-# 4. 构建 APK
 cd android
 ANDROID_HOME=$HOME/Library/Android/sdk \
   JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ./gradlew assembleDebug
-
 # APK 路径：android/app/build/outputs/apk/debug/app-debug.apk
 ```
-
-### 在手机上运行
-
-```bash
-# 连接手机（开启 USB 调试），直接安装
-adb install android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-或在 Android Studio 中打开 `android/` 目录，点击 ▶ Run。
 
 ## 🛠️ 技术栈
 
