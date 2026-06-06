@@ -24,22 +24,22 @@ export default function MaterialStats({ result }: MaterialStatsProps) {
   const sortedStats = [...stats].sort((a, b) => b.count - a.count);
   const totalBeads = sortedStats.reduce((sum, s) => sum + s.count, 0);
 
-  const handleExportPNG = () => {
+  const handleExportPNG = async () => {
     try {
       const blob = exportToPNG(result, { cellSize: 40, showGrid: true, showLabels: true });
       const brandName = result.colorMap[0]?.brand || 'pattern';
-      downloadBlob(blob, `bead-pattern-${brandName}-${result.width}x${result.height}.png`);
+      await downloadBlob(blob, `bead-pattern-${brandName}-${result.width}x${result.height}.png`);
     } catch (err) {
       console.error('PNG export failed:', err);
       alert('导出PNG失败');
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       const blob = exportToExcel(result);
       const brandName = result.colorMap[0]?.brand || 'pattern';
-      downloadBlob(blob, `bead-pattern-${brandName}-${result.width}x${result.height}.xlsx`);
+      await downloadBlob(blob, `bead-pattern-${brandName}-${result.width}x${result.height}.xlsx`);
     } catch (err) {
       console.error('Excel export failed:', err);
       alert('导出Excel失败');

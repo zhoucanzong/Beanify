@@ -359,7 +359,63 @@ function isLightColor(rgb: [number, number, number]): boolean {
 /**
  * Trigger a file download
  */
-export function downloadBlob(blob: Blob, filename: string) {
+/** Check if running inside Capacitor native app */
+function isNativePlatform(): boolean {
+  return typeof window !== 'undefined'
+    && !!(window as any)?.Capacitor?.isNativePlatform?.();
+}
+
+/**
+ * Convert Blob to base64 string (without data URL prefix)
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Download (or save) a blob as a file.
+ * - Web: triggers browser download via <a> click
+ * - Capacitor native: writes to Documents directory via Filesystem API
+ */
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  // Native (Capacitor) path — save via Filesystem API
+  if (isNativePlatform()) {
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+      const base64 = await blobToBase64(blob);
+      const saved = await Filesystem.writeFile({
+        path: filename,
+        data: base64,
+        directory: Directory.Documents,
+      });
+      await Share.share({
+        title: filename,
+        text: '看看我做的拼豆图纸！',
+        url: saved.uri,
+      });
+    } catch (err) {
+      console.error('Native save failed:', err);
+      // Fallback to browser download
+      fallbackDownload(blob, filename);
+    }
+    return;
+  }
+
+  // Web path — browser download
+  fallbackDownload(blob, filename);
+}
+
+/** Browser download fallback (a.click) */
+function fallbackDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

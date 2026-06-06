@@ -2,3 +2,10 @@ node_modules
 dist
 .DS_Store
 *.bak
+
+# Android (Capacitor) native project — regenerate with: npx cap sync android
+android/
+.idea/
+*.log
+*.apk
+local.properties

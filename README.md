@@ -43,6 +43,46 @@ npm run preview
 
 开发服务器默认运行在 `http://localhost:3000`。
 
+## 📱 Android App
+
+Beanify 使用 [Capacitor](https://capacitorjs.com) 将 Web App 打包为 Android 原生应用。
+
+### 前提条件
+
+- [Android Studio](https://developer.android.com/studio)（含 Android SDK 34+）
+- JDK 17+
+- Android SDK 命令行工具（`sdkmanager`）
+
+### 构建 APK
+
+```bash
+# 1. 安装 Capacitor 依赖（已完成）
+npm install
+
+# 2. 构建前端
+npm run build
+
+# 3. 同步到 Android 项目
+npx cap sync android
+
+# 4. 构建 APK
+cd android
+ANDROID_HOME=$HOME/Library/Android/sdk \
+  JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+  ./gradlew assembleDebug
+
+# APK 路径：android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### 在手机上运行
+
+```bash
+# 连接手机（开启 USB 调试），直接安装
+adb install android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+或在 Android Studio 中打开 `android/` 目录，点击 ▶ Run。
+
 ## 🛠️ 技术栈
 
 | 技术 | 说明 |

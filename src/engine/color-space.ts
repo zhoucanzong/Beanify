@@ -19,10 +19,6 @@ function srgbToLinear(v: number): number {
 /**
  * Convert linear RGB [0-1] to sRGB [0-255]
  */
-function linearToSrgb(v: number): number {
-  v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
-  return Math.round(v * 255);
-}
 
 /**
  * Convert RGB [0-255] to XYZ

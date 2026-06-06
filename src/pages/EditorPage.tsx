@@ -169,7 +169,7 @@ export default function EditorPage() {
     [editor]
   );
 
-  const handleExportPNG = useCallback(() => {
+  const handleExportPNG = useCallback(async () => {
     if (!confirmEmptyExport(editor.grid)) return;
     const result = buildExportResult(editor.grid, editor.colorPalette, editor.width, editor.height);
     const cellSize = editor.width > 80 || editor.height > 80 ? 20 : 32;
@@ -181,7 +181,7 @@ export default function EditorPage() {
     downloadBlob(blob, makeFilename(editor.width, editor.height, 'png'));
   }, [editor]);
 
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async () => {
     if (!confirmEmptyExport(editor.grid)) return;
     const result = buildExportResult(editor.grid, editor.colorPalette, editor.width, editor.height);
     const blob = exportToExcel(result, { brand: editor.brand });

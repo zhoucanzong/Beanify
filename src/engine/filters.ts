@@ -11,11 +11,11 @@
  */
 
 import type { BeadColor } from './types';
-import { rgbToLab, deltaE76Squared, deltaE2000 } from './color-space';
+import { rgbToLab, deltaE2000 } from './color-space';
 
 // Pre-allocated direction arrays (4-connected, 8-connected)
 const DIRS_4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-const DIRS_8 = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+/* const DIRS_8 = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
 // ============================================================================
 // Bilateral Filter (optimized with precomputed spatial weights)
